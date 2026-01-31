@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>CityConnect - Citizen Portal</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <style>
+        body { background-color: #f8f9fa; font-family: 'Segoe UI', sans-serif; }
+        .hero { background: #004085; color: white; padding: 40px 0; margin-bottom: 30px; border-bottom: 5px solid #002752; }
+    </style>
+</head>
+<body>
+    <div class="hero text-center">
+        <h1>CityConnect Portal</h1>
+        <p>AI-Powered Complaint Categorization & Routing</p>
+    </div>
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <div class="card shadow border-0">
+                    <div class="card-body p-4">
+                        {% with messages = get_flashed_messages() %}
+                          {% if messages %}{% for message in messages %}
+                            <div class="alert alert-success shadow-sm">{{ message }}</div>
+                          {% endfor %}{% endif %}
+                        {% endwith %}
+                        <form method="POST">
+                            <div class="form-group">
+                                <label class="h6"><b>Please describe the issue in detail:</b></label>
+                                <textarea name="complaint_text" class="form-control" rows="6" placeholder="Example: The street light by the health center is broken and flickering..." required></textarea>
+                            </div>
+                            <button type="submit" class="btn btn-primary btn-block btn-lg shadow">Submit to AI Dispatch</button>
+                        </form>
+                    </div>
+                </div>
+                <p class="text-center mt-4"><a href="/admin" class="text-muted">Government Staff Access</a></p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
