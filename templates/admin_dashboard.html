@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h2 class="mb-4 text-primary">{{ current_user.department }} Control Center</h2>
+        <div class="card shadow">
+            <div class="card-body">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Complaint / Location</th>
+                            <th>AI Category (Confidence)</th>
+                            <th>Current Route</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for c in complaints %}
+                        <tr>
+                            <td>#{{ c.id }}</td>
+                            <td>
+                                <strong>{{ c.text[:50] }}...</strong><br>
+                                <small class="text-muted">{{ c.location }}</small>
+                            </td>
+                            <td>{{ c.ai_category }} ({{ "%.0f"|format(c.confidence*100) }}%)</td>
+                            <td>
+                                <span class="badge {% if c.final_category == 'MANUAL TRIAGE' %}bg-danger{% else %}bg-success{% endif %}">
+                                    {{ c.final_category }}
+                                </span>
+                            </td>
+                            <td>
+                                <form action="/reassign/{{ c.id }}" method="POST" class="d-inline">
+                                    <select name="new_dept" class="form-select form-select-sm d-inline w-auto">
+                                        <option value="HEALTHCARE">Healthcare</option>
+                                        <option value="INFRASTRUCTURE">Infrastructure</option>
+                                        <option value="SANITATION">Sanitation</option>
+                                        <option value="PUBLIC SAFETY">Public Safety</option>
+                                    </select>
+                                    <button type="submit" class="btn btn-sm btn-warning">Re-Route</button>
+                                </form>
+                                <form action="/resolve/{{ c.id }}" method="POST" class="d-inline">
+                                    <button type="submit" class="btn btn-sm btn-success">Resolve</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -4,72 +4,82 @@
     <meta charset="UTF-8">
     <title>Admin Dashboard - CityConnect</title>
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body class="bg-light">
-    <nav class="navbar navbar-dark bg-dark mb-4 shadow">
-        <span class="navbar-brand">CityConnect: Administrative Control</span>
+    <nav class="navbar navbar-dark bg-dark mb-4">
+        <div class="container-fluid"><a class="navbar-brand font-weight-bold" href="/">CityConnect ADMIN PANEL</a></div>
     </nav>
     <div class="container-fluid">
-        <div class="card border-0 shadow-sm">
-            <div class="card-body">
-                <h3 class="mb-4">Live Dispatch Queue</h3>
-                
-                {% with messages = get_flashed_messages() %}
-                  {% if messages %}{% for message in messages %}
-                    <div class="alert alert-warning border-0">{{ message }}</div>
-                  {% endfor %}{% endif %}
-                {% endwith %}
-
-                <table class="table table-hover align-middle">
-                    <thead class="thead-dark">
-                        <tr>
-                            <th>ID</th>
-                            <th>Complaint Narrative</th>
-                            <th>AI Category</th>
-                            <th>Confidence Index</th>
-                            <th>Final Routing</th>
-                            <th>System Status</th>
-                            <th>Manual Action</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for c in complaints %}
-                        <tr>
-                            <td>#{{ c.id }}</td>
-                            <td><div style="max-height: 50px; overflow: hidden; font-size: 0.85em;">{{ c.raw_text }}</div></td>
-                            <td><span class="badge badge-light border">{{ c.ai_category }}</span></td>
-                            <td>
-                                <div class="progress" style="height: 10px; width: 100px;">
-                                    <div class="progress-bar {% if c.confidence_score < 0.7 %}bg-warning{% else %}bg-success{% endif %}" 
-                                         role="progressbar" style="width: {{ c.confidence_score * 100 }}%"></div>
-                                </div>
-                                <small class="text-muted">{{ "%.1f"|format(c.confidence_score * 100) }}%</small>
-                            </td>
-                            <td>
-                                <span class="badge {% if c.final_category == 'MANUAL HUMAN TRIAGE' %}badge-danger{% else %}badge-info{% endif %} p-2">
-                                    {{ c.final_category }}
-                                </span>
-                            </td>
-                            <td><small class="font-weight-bold">{{ c.status }}</small></td>
-                            <td>
-                                <!-- OVERRIDE FORM -->
-                                <form action="/override/{{ c.id }}" method="POST" class="form-inline">
-                                    <select name="new_dept" class="form-control form-control-sm mr-1" style="font-size: 0.7em;">
-                                        <option value="HEALTHCARE">HEALTHCARE</option>
-                                        <option value="INFRASTRUCTURE">INFRASTRUCTURE</option>
-                                        <option value="SANITATION">SANITATION</option>
-                                        <option value="ADMINISTRATION">ADMINISTRATION</option>
-                                        <option value="PUBLIC SAFETY">PUBLIC SAFETY</option>
-                                    </select>
-                                    <button type="submit" class="btn btn-sm btn-warning" style="font-size: 0.7em;">FIX</button>
-                                </form>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>                    xcode-select --install
-                </table>
+        <div class="row">
+            <div class="col-md-4">
+                <div class="card shadow-sm mb-4 border-0">
+                    <div class="card-body">
+                        <h5 class="card-title text-muted">Departmental Distribution</h5>
+                        <div style="height: 300px;"><canvas id="loadChart"></canvas></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-8">
+                <div class="card shadow-sm border-0">
+                    <div class="card-body">
+                        <h5 class="mb-4">Live Triage Queue</h5>
+                        <table class="table table-sm table-hover">
+                            <thead class="thead-dark">
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Complaint Narrative</th>
+                                    <th>Confidence</th>
+                                    <th>Current Route</th>
+                                    <th>System Status</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for c in complaints %}
+                                <tr>
+                                    <td>#{{ c.id }}</td>
+                                    <td><small>{{ c.raw_text[:70] }}...</small></td>
+                                    <td>{{ "%.1f"|format(c.confidence_score * 100) }}%</td>
+                                    <td>
+                                        <span class="badge {% if c.final_category == 'MANUAL HUMAN TRIAGE' %}badge-danger{% else %}badge-primary{% endif %}">
+                                            {{ c.final_category }}
+                                        </span>
+                                    </td>
+                                    <td><small class="font-weight-bold text-success">{{ c.status }}</small></td>
+                                    <td>
+                                        <form action="/override/{{ c.id }}" method="POST" class="form-inline">
+                                            <select name="new_dept" class="form-control form-control-sm mr-1" style="width: 100px;">
+                                                <option value="HEALTHCARE">Health</option>
+                                                <option value="INFRASTRUCTURE">Infras</option>
+                                                <option value="SANITATION">Sani</option>
+                                                <option value="ADMINISTRATION">Admin</option>
+                                                <option value="PUBLIC SAFETY">Safety</option>
+                                            </select>
+                                            <button type="submit" class="btn btn-sm btn-warning">FIX</button>
+                                        </form>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
+    <script>
+        new Chart(document.getElementById('loadChart'), {
+            type: 'pie',
+            data: {
+                labels: {{ labels|tojson|safe }},
+                datasets: [{
+                    data: {{ values|tojson|safe }},
+                    backgroundColor: ['#007bff', '#28a745', '#ffc107', '#dc3545', '#17a2b8', '#6c757d']
+                }]
+            },
+            options: { responsive: true, maintainAspectRatio: false }
+        });
+    </script>
 </body>
 </html>

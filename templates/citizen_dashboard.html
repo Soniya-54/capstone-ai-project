@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row">
+    <div class="col-md-5">
+        <div class="card p-4 mb-4 border-start border-primary border-5">
+            <h4>Submit New Complaint</h4>
+            <form method="POST" enctype="multipart/form-data" action="/submit">
+                <div class="mb-3">
+                    <label class="small fw-bold">Description of Issue</label>
+                    <textarea name="text" class="form-control" rows="4" placeholder="Be descriptive..." required></textarea>
+                </div>
+                <div class="mb-3">
+                    <label class="small fw-bold">Location (Area/Ward)</label>
+                    <input type="text" name="location" class="form-control" placeholder="e.g. Birendra Chowk, Kathmandu" required>
+                </div>
+                <div class="mb-3">
+                    <label class="small fw-bold">Attach Image Evidence (Optional)</label>
+                    <input type="file" name="image" class="form-control">
+                </div>
+                <button type="submit" class="btn btn-primary w-100">Send to AI Dispatch</button>
+            </form>
+        </div>
+    </div>
+    
+    <div class="col-md-7">
+        <div class="card p-4">
+            <h4>My Recent Submissions</h4>
+            <div class="table-responsive mt-3">
+                <table class="table table-hover small">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Status</th>
+                            <th>AI Route</th>
+                            <th>Date</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for c in complaints %}
+                        <tr>
+                            <td>#{{ c.id }}</td>
+                            <td><span class="badge {% if c.status == 'Resolved' %}bg-success{% else %}bg-warning{% endif %}">{{ c.status }}</span></td>
+                            <td>{{ c.final_category }}</td>
+                            <td>{{ c.timestamp.strftime('%d %b') }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

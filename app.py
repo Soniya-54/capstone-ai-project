@@ -1,111 +1,126 @@
+import os, re, datetime, joblib, nltk
 from flask import Flask, render_template, request, redirect, url_for, flash
 from flask_sqlalchemy import SQLAlchemy
-import joblib
-import datetime
-import re
-import nltk
+from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
+from werkzeug.utils import secure_filename
 from nltk.stem import WordNetLemmatizer
 from nltk.corpus import stopwords
-
-# Standardized NLP setup
-nltk.download('wordnet', quiet=True)
-nltk.download('stopwords', quiet=True)
+from models import db, User, Complaint
+from ai_engine import get_ai_prediction
 
 app = Flask(__name__)
-app.secret_key = "soniya_capstone_2026_secured"
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///city_complaints.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-db = SQLAlchemy(app)
+app.config['SECRET_KEY'] = 'enterprise_level_secret_2026'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///city_v2.db'
+app.config['UPLOAD_FOLDER'] = 'static/uploads'
 
-# --- AI INTEGRATION LAYER ---
-lemmatizer = WordNetLemmatizer()
-stop_words = set(stopwords.words('english'))
+db.init_app(app)
+login_manager = LoginManager()
+login_manager.login_view = 'login'
+login_manager.init_app(app)
 
-def clean_text(text):
-    text = str(text).lower()
-    text = re.sub(r'[^a-zA-Z\s]', '', text)
-    words = text.split()
-    cleaned = [lemmatizer.lemmatize(w) for w in words if w not in stop_words]
-    return " ".join(cleaned)
-
-# Load the Brain
-try:
-    model = joblib.load('complaint_model.pkl')
-    tfidf = joblib.load('tfidf_vectorizer.pkl')
-    print("AI Brain integrated successfully.")
-except:
-    print("CRITICAL: AI Model files missing!")
-
-# --- DATABASE SCHEMA ---
-class Complaint(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    raw_text = db.Column(db.Text, nullable=False)
-    ai_category = db.Column(db.String(50))
-    final_category = db.Column(db.String(50)) 
-    confidence_score = db.Column(db.Float)
-    status = db.Column(db.String(30), default="AI DISPATCHED")
-    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
-
-with app.app_context():
-    db.create_all()
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
 
 # --- ROUTES ---
 
-@app.route('/', methods=['GET', 'POST'])
-def citizen_portal():
+@app.route('/login', methods=['GET', 'POST'])
+def login():
     if request.method == 'POST':
-        raw_text = request.form['complaint_text']
-        cleaned = clean_text(raw_text)
-        vec = tfidf.transform([cleaned])
-        
-        probs = model.predict_proba(vec)[0]
-        max_idx = probs.argmax()
-        category = model.classes_[max_idx]
-        confidence = probs[max_idx]
-        
-        # TRIAGE LOGIC: If AI is unsure, route to Manual Triage
-        # This addresses your research point on 'Accountability'
-        if confidence < 0.70:
-            assigned_route = "MANUAL HUMAN TRIAGE"
-            current_status = "PENDING REVIEW"
-        else:
-            assigned_route = category
-            current_status = "AI DISPATCHED"
+        user = User.query.filter_by(email=request.form['email']).first()
+        if user and user.password == request.form['password']:
+            login_user(user)
+            return redirect(url_for('dashboard'))
+        flash('Invalid Credentials')
+    return render_template('login.html')
 
-        new_complaint = Complaint(
-            raw_text=raw_text,
-            ai_category=category,
-            final_category=assigned_route,
-            confidence_score=confidence,
-            status=current_status
-        )
-        db.session.add(new_complaint)
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
+        email = request.form['email']
+        if User.query.filter_by(email=email).first():
+            flash('Email already exists.')
+            return redirect(url_for('register'))
+        new_user = User(email=email, password=request.form['password'], role='CITIZEN')
+        db.session.add(new_user)
         db.session.commit()
-        
-        flash(f"Submission recorded! Tracking ID: #{new_complaint.id}.")
-        return redirect(url_for('citizen_portal'))
+        return redirect(url_for('login'))
+    return render_template('register.html')
 
-    return render_template('index.html')
+@app.route('/logout')
+def logout():
+    logout_user()
+    return redirect(url_for('login'))
 
-@app.route('/admin')
-def admin_dashboard():
-    complaints = Complaint.query.order_by(Complaint.created_at.desc()).all()
-    return render_template('admin.html', complaints=complaints)
+@app.route('/')
+@login_required
+def dashboard():
+    if current_user.role == 'ADMIN':
+        # ABOVE PAR LOGIC: Admin sees their department AND things needing triage
+        items = Complaint.query.filter(
+            (Complaint.final_category == current_user.department) | 
+            (Complaint.final_category == 'MANUAL TRIAGE')
+        ).order_by(Complaint.timestamp.desc()).all()
+        return render_template('admin_dashboard.html', complaints=items)
+    else:
+        items = Complaint.query.filter_by(citizen_id=current_user.id).all()
+        return render_template('citizen_dashboard.html', complaints=items)
 
-# NEW ROUTE: Manual Override Logic
-@app.route('/override/<int:id>', methods=['POST'])
-def override_route(id):
-    complaint = Complaint.query.get(id)
-    if not complaint:
-        return "Error: Complaint not found", 404
-        
-    new_dept = request.form['new_dept']
-    complaint.final_category = new_dept
-    complaint.status = "HUMAN VERIFIED"
-    db.session.commit()
+@app.route('/submit', methods=['POST'])
+@login_required
+def submit_complaint():
+    text = request.form['text']
+    loc = request.form['location']
+    file = request.files.get('image')
     
-    flash(f"Complaint #{id} manually re-routed to {new_dept}.")
-    return redirect(url_for('admin_dashboard'))
+    filename = 'none.jpg'
+    if file and file.filename != '':
+        filename = secure_filename(f"{current_user.id}_{file.filename}")
+        file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
 
+    category, confidence = get_ai_prediction(text)
+    # Triage Rule
+    final_route = category if confidence > 0.70 else "MANUAL TRIAGE"
+
+    new_c = Complaint(
+        citizen_id=current_user.id, text=text, location=loc,
+        image_file=filename, ai_category=category,
+        final_category=final_route, confidence=confidence
+    )
+    db.session.add(new_c)
+    db.session.commit()
+    flash(f"AI categorized this as {category} with {confidence:.1%} confidence.")
+    return redirect(url_for('dashboard'))
+
+@app.route('/resolve/<int:id>', methods=['POST'])
+@login_required
+def resolve_complaint(id):
+    complaint = Complaint.query.get(id)
+    complaint.status = 'Resolved'
+    db.session.commit()
+    flash(f"Case #{id} Resolved.")
+    return redirect(url_for('dashboard'))
+
+@app.route('/reassign/<int:id>', methods=['POST'])
+@login_required
+def reassign(id):
+    complaint = Complaint.query.get(id)
+    complaint.final_category = request.form['new_dept']
+    db.session.commit()
+    flash(f"Case #{id} re-routed to {complaint.final_category}.")
+    return redirect(url_for('dashboard'))
+
+# --- SYSTEM INITIALIZER ---
 if __name__ == '__main__':
+    with app.app_context():
+        db.create_all()
+        # Create a suite of Admins for different departments
+        depts = ['HEALTHCARE', 'INFRASTRUCTURE', 'SANITATION', 'PUBLIC SAFETY', 'ADMINISTRATION']
+        for d in depts:
+            email = f"admin_{d.lower()}@city.gov"
+            if not User.query.filter_by(email=email).first():
+                user = User(email=email, password='123', role='ADMIN', department=d)
+                db.session.add(user)
+        db.session.commit()
+        print("System ready with multiple departmental admins.")
     app.run(debug=True)
